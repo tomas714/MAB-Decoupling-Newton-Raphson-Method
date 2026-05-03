@@ -9,6 +9,7 @@ struct mabdec
     float  Lm[MAB_PORTS];
     float   n[MAB_PORTS];
     float   K[MAB_PORTS][MAB_PORTS];
+    float pha[MAB_PORTS][MAB_PORTS];
     float   i[MAB_PORTS];
     float*  v[MAB_PORTS];
     float* ph[MAB_PORTS];

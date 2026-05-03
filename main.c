@@ -5,8 +5,8 @@
 
 int main(void)
 {
-    float voltage[MAB_PORTS] = {24.0F, 24.0F, 24.0F};
-    float   phase[MAB_PORTS] = { 0.0F,  0.0F,  0.0F};
+    float voltage[MAB_PORTS] = {24.0F, 24.0F, 24.0F, 24.0F, 24.0F};
+    float   phase[MAB_PORTS] = { 0.0F,  0.0F,  0.0F,  0.0F,  0.0F};
 
     //
     //  SETTINGS
@@ -19,7 +19,7 @@ int main(void)
         mabdec_setPhasePtr(i, (float*)&phase[i]);
         mabdec_setRatio(i, 6.0F/3.0F);
         mabdec_setLm(i, 600e-6F);
-        mabdec_setLs(i, 1e-6F);
+        mabdec_setLs(i, 1.0e-6F);
     }
     mabdec_constUpdate();
 
@@ -27,11 +27,13 @@ int main(void)
     //  UPDATE PHASE
     //
 
-    mabdec_setRequest(0, 10.0F);
-    mabdec_setRequest(1, -5.0F);
-    mabdec_setRequest(2, -5.0F);
+    mabdec_setRequest(0, +10.0F);
+    mabdec_setRequest(1,  +2.5F);
+    mabdec_setRequest(2,  +5.0F);
+    mabdec_setRequest(3,  -7.5F);
+    mabdec_setRequest(4, -10.0F);
     
-    for (unsigned int i = 0; i < 3; i++) {
+    for (unsigned int i = 0; i < 5; i++) {
         mabdec_phaseUpdate();
     }
 
