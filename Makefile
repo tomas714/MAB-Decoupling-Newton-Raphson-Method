@@ -1,5 +1,5 @@
 CC     = gcc
-CFLAGS = -std=c11 -Wall -Werror -g
+CFLAGS = -std=c11 -Wall -Werror -Ofast -g
 LDLIBS = -lm
 OUTPUT = app
 
@@ -17,3 +17,6 @@ $(OUTPUT): main.o matrix.o mabdec.o
 clean:
 	@echo "Cleanup ..."
 	rm -rf *.o $(OUTPUT)
+	@echo ""
+
+rebuild: clean all

@@ -15,43 +15,59 @@ static struct mabdec dec;
 //  PRIVATE FUNCTIONS
 //
 
-static void mabdec_s_matrix(struct matrix* s)
+static inline void mabdec_phaseDifference(void)
 {
     for (unsigned int i = 0; i < MAB_PORTS; i++) {
-        float result = 0.0F;
-        for (unsigned int j = 0; j < MAB_PORTS; j++) {
-            if (i != j) {
-                float pha = (*dec.ph[i]) - (*dec.ph[j]);
-                result += (*dec.v[j]) * dec.K[i][j] * pha * (1.0F - 2.0F * fabs(pha));
-            }
+        float ph = (*dec.ph[i]);
+        for (unsigned int j = i + 1; j < MAB_PORTS; j++) {
+            dec.pha[i][j] = ph - (*dec.ph[j]);
         }
-        s->data[i][0] = -1.0F * (result - dec.i[i]);
+    }
+}
+
+static inline void mabdec_s_vector(struct matrix* restrict s)
+{
+    for (unsigned int i = 0; i < MAB_PORTS; i++) {
+        s->data[i][0] = dec.i[i];
+    }
+
+    for (unsigned int i = 0; i < MAB_PORTS; i++) {
+        for (unsigned int j = i + 1; j < MAB_PORTS; j++) {
+            float res = dec.K[i][j] * dec.pha[i][j] * (1.0F - 2.0F * fabs(dec.pha[i][j]));
+            s->data[i][0] -= (*dec.v[j]) * res;
+            s->data[j][0] += (*dec.v[i]) * res;
+        }
     }
 
     s->rows = MAB_PORTS;
     s->cols = 1;
 }
 
-static void mabdec_w_matrix(struct matrix* w)
+static inline void mabdec_g_matrix(struct matrix* restrict w)
 {
     for (unsigned int i = 0; i < MAB_PORTS; i++) {
-        for (unsigned int j = 0; j < MAB_PORTS; j++) {
-            float result = 0.0F;
-            if (i == j) {
-                for (unsigned int k = 0; k < MAB_PORTS; k++) {
-                    if (i != k) {
-                        result += (*dec.v[k]) * dec.K[i][k] * (1.0F - 4.0F * fabs((*dec.ph[i]) - (*dec.ph[k])));
-                    }
-                }
-            }
-            else {
-                result = (*dec.v[j]) * dec.K[i][j] * (4.0F * fabs((*dec.ph[i]) - (*dec.ph[j])) - 1.0F);
-            }
-            w->data[i][j] = result;
+        w->data[i][i] = 0.0F;
+    }
+
+    for (unsigned int i = 0; i < MAB_PORTS; i++) {
+        for (unsigned int j = i + 1; j < MAB_PORTS; j++) {
+            float res = dec.K[i][j] * (4.0F * fabs(dec.pha[i][j]) - 1.0F);
+            w->data[i][j]  = (*dec.v[j]) * res;
+            w->data[j][i]  = (*dec.v[i]) * res;
+            w->data[i][i] -= w->data[i][j];
+            w->data[j][j] -= w->data[j][i];
         }
     }
+
     w->rows = MAB_PORTS;
     w->cols = MAB_PORTS;
+}
+
+static inline void mabdec_addIncrements(struct matrix* restrict inc) 
+{
+    for (unsigned int i = 0; i < MAB_PORTS; i++) {
+		*dec.ph[i] += inc->data[i][0];
+	}
 }
 
 //
@@ -67,19 +83,17 @@ void mabdec_constUpdate(void)
 {
     float Leq = 0.0F;
     for (unsigned int i = 0; i < MAB_PORTS; i++) {
-        float n2 = dec.n[i] * dec.n[i];
-        Leq += (n2 / dec.Ls[i]) + (n2 / dec.Lm[i]);
+        float n = dec.n[i] * dec.n[i];
+        Leq += (n / dec.Ls[i]);
+        Leq += (n / dec.Lm[i]);
     }
     Leq = 1.0F / Leq;
 
     for (unsigned int i = 0; i < MAB_PORTS; i++) {
-        for (unsigned int j = 0; j < MAB_PORTS; j++) {
-            if (i != j) {
-                dec.K[i][j] = (1.0F / dec.fs) * ((dec.n[i] * dec.n[j]) / ((dec.Ls[i] * dec.Ls[j]) / Leq));
-            }
-            else {
-                dec.K[i][j] = 0.0F;
-            }
+        for (unsigned int j = i + 1; j < MAB_PORTS; j++) {
+            float n = dec.n[i]  * dec.n[j];
+            float L = dec.Ls[i] * dec.Ls[j];
+            dec.K[i][j] = n / (dec.fs * (L / Leq));
         }
     }
 }
@@ -88,14 +102,12 @@ void mabdec_phaseUpdate(void)
 {
     static struct matrix tmp[3];
 
-	mabdec_w_matrix(&tmp[0]);
+    mabdec_phaseDifference();
+	mabdec_g_matrix(&tmp[0]);
 	matrix_geninv  (&tmp[1], &tmp[0]);
-	mabdec_s_matrix(&tmp[0]);
-	matrix_multiple(&tmp[2], &tmp[1], &tmp[0]);
-
-	for (unsigned int i = 0; i < MAB_PORTS; i++) {
-		*dec.ph[i] += tmp[2].data[i][0];
-	}
+	mabdec_s_vector(&tmp[0]);
+	matrix_multiply(&tmp[2], &tmp[1], &tmp[0]);
+    mabdec_addIncrements(&tmp[2]);
 }
 
 void mabdec_setFs(float freq)
